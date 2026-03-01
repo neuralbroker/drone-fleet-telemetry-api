@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: drone-telemetry-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - drone-network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: drone-telemetry-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-your-secret-key-change-in-production}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - DEBUG=false
+      - SIMULATOR_ENABLED=true
+      - SIMULATOR_DRONES_COUNT=5
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - drone-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: drone-telemetry-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - VITE_API_URL=http://localhost:8000
+      - VITE_WS_URL=ws://localhost:8000
+    depends_on:
+      - backend
+    networks:
+      - drone-network
+
+volumes:
+  redis_data:
+
+networks:
+  drone-network:
+    driver: bridge
