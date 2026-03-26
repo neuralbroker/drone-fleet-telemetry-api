@@ -100,9 +100,8 @@ class RedisClient:
                         await asyncio.sleep(current_delay)
                         current_delay = min(current_delay * 2, 30)  # Exponential backoff, max 30s
             
-            # All retries exhausted
-            logger.error(f"Failed to connect to Redis after {max_retries} attempts")
-            raise ConnectionError(f"Could not connect to Redis after {max_retries} attempts")
+            # All retries exhausted - just log and continue
+            logger.warning(f"Could not connect to Redis after {max_retries} attempts - continuing without Redis")
     
     async def disconnect(self) -> None:
         """

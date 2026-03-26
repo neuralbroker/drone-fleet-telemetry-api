@@ -138,6 +138,24 @@ class ConnectionManager:
         for ws in disconnected:
             self.disconnect(ws)
     
+    async def broadcast_telemetry(self, frame: TelemetryFrame) -> None:
+        """Broadcast telemetry frame to all connected clients."""
+        message = {
+            "type": WSMessageType.TELEMETRY.value,
+            "data": frame.model_dump(mode='json'),
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        await self.broadcast(message)
+    
+    async def broadcast_alert(self, alert: dict) -> None:
+        """Broadcast alert to all connected clients."""
+        message = {
+            "type": WSMessageType.ALERT.value,
+            "data": alert,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        await self.broadcast(message)
+    
     async def send_heartbeat(self, websocket: WebSocket) -> None:
         """
         Send heartbeat ping to client.
@@ -419,3 +437,17 @@ async def get_fleet_snapshot() -> dict:
         "drones": result_drones,
         "alerts": fleet_service.get_alerts(limit=20)
     }
+
+
+# Global connection manager instance
+connection_manager = ConnectionManager()
+
+
+async def handle_telemetry(frame: TelemetryFrame) -> None:
+    """Handle incoming telemetry frame and broadcast to clients."""
+    await connection_manager.broadcast_telemetry(frame)
+
+
+async def handle_alert_gateway(alert: dict) -> None:
+    """Handle incoming alert and broadcast to clients."""
+    await connection_manager.broadcast_alert(alert)

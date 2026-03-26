@@ -7,7 +7,10 @@ and background tasks for telemetry simulation and streaming.
 import asyncio
 import logging
 import time
-import psutil
+try:
+    import psutil
+except ImportError:
+    psutil = None
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
@@ -46,13 +49,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Startup
     logger.info("Starting Drone Fleet Telemetry API...")
     
-    # Connect to Redis
+    # Connect to Redis (optional - continue if unavailable)
     try:
-        await redis_client.connect()
+        await redis_client.connect(max_retries=1, retry_delay=0.5)
         logger.info("Redis connection established")
     except Exception as e:
-        logger.error(f"Failed to connect to Redis: {e}")
-        # Continue without Redis for development
+        logger.warning(f"Redis not available, continuing without it: {e}")
     
     # Initialize fleet service
     await fleet_service.initialize()
@@ -147,8 +149,12 @@ async def detailed_health_check():
     
     # Get CPU and memory usage
     try:
-        cpu_percent = psutil.cpu_percent(interval=0.1)
-        memory = psutil.virtual_memory()
+        if psutil:
+            cpu_percent = psutil.cpu_percent(interval=0.1)
+            memory = psutil.virtual_memory()
+        else:
+            cpu_percent = 0
+            memory = None
     except Exception:
         cpu_percent = 0
         memory = None
@@ -193,9 +199,14 @@ async def system_metrics():
     uptime = time.time() - start_time
     
     try:
-        cpu_percent = psutil.cpu_percent(interval=0.1)
-        memory = psutil.virtual_memory()
-        disk = psutil.disk_usage('/')
+        if psutil:
+            cpu_percent = psutil.cpu_percent(interval=0.1)
+            memory = psutil.virtual_memory()
+            disk = psutil.disk_usage('/')
+        else:
+            cpu_percent = 0
+            memory = None
+            disk = None
     except Exception:
         return {"error": "Failed to get system metrics"}
     
@@ -213,15 +224,21 @@ async def system_metrics():
         "uptime_seconds": round(uptime, 2),
         "system": {
             "cpu_percent": round(cpu_percent, 2),
-            "memory_total_gb": round(memory.total / (1024**3), 2),
-            "memory_used_gb": round(memory.used / (1024**3), 2),
-            "memory_percent": round(memory.percent, 2),
-            "disk_percent": round(disk.percent, 2)
+            "memory_total_gb": round(memory.total / (1024**3), 2) if memory else 0,
+            "memory_used_gb": round(memory.used / (1024**3), 2) if memory else 0,
+            "memory_percent": round(memory.percent, 2) if memory else 0,
+            "disk_percent": round(disk.percent, 2) if disk else 0
         },
         "fleet": summary.model_dump() if summary else {},
         "websocket": {
             "active_connections": ws_clients
         }
+    } if psutil else {
+        "timestamp": time.time(),
+        "uptime_seconds": round(uptime, 2),
+        "system": {"error": "psutil not available"},
+        "fleet": summary.model_dump() if summary else {},
+        "websocket": {"active_connections": ws_clients}
     }
 
 
