@@ -6,7 +6,7 @@ to detect anomalies and generate alerts. Includes optional OpenAI
 integration for alert summarization.
 """
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional, Callable, Awaitable
 from uuid import UUID, uuid4
 
@@ -152,7 +152,7 @@ class AnomalyEngine:
             type=alert_type,
             severity=severity,
             message=message,
-            timestamp=datetime.utcnow()
+            timestamp=datetime.now(timezone.utc)
         )
         
         # Optionally enhance with OpenAI
@@ -198,7 +198,7 @@ class AnomalyEngine:
             return True
         
         # Check if debounce period has passed
-        elapsed = (datetime.utcnow() - last_time).total_seconds()
+        elapsed = (datetime.now(timezone.utc) - last_time).total_seconds()
         return elapsed >= settings.ANOMALY_DEBOUNCE_SECONDS
     
     def _record_alert(self, drone_id: UUID, alert_type: AlertType) -> None:
@@ -212,7 +212,7 @@ class AnomalyEngine:
         if drone_id not in self._last_alert:
             self._last_alert[drone_id] = {}
         
-        self._last_alert[drone_id][alert_type] = datetime.utcnow()
+        self._last_alert[drone_id][alert_type] = datetime.now(timezone.utc)
     
     async def _enhance_alert_with_ai(
         self,

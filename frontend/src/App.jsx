@@ -7,24 +7,21 @@ import Login from './components/Login';
 
 function App() {
   const [selectedDrone, setSelectedDrone] = useState(null);
-  const [isLoggedIn, setIsLoggedIn] = useState(() => {
-    return localStorage.getItem('isLoggedIn') === 'true';
-  });
-  const { drones, alerts, fleetSummary, connected } = useTelemetry(isLoggedIn);
+  const [token, setToken] = useState(() => localStorage.getItem('token') || null);
+  const { drones, alerts, fleetSummary, connected, authHeaders } = useTelemetry(token);
 
-  const handleLogin = () => {
-    localStorage.setItem('isLoggedIn', 'true');
-    setIsLoggedIn(true);
+  const handleLogin = (jwt) => {
+    setToken(jwt);
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('isLoggedIn');
-    setIsLoggedIn(false);
+    localStorage.removeItem('token');
+    setToken(null);
   };
 
   const droneList = Object.values(drones);
 
-  if (!isLoggedIn) {
+  if (!token) {
     return <Login onLogin={handleLogin} />;
   }
 
@@ -76,8 +73,8 @@ function App() {
           <div className="lg:col-span-2 space-y-6">
             <div className="bg-white rounded-lg shadow p-4">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Live Fleet Map</h2>
-              <FleetMap 
-                drones={droneList} 
+              <FleetMap
+                drones={droneList}
                 onDroneClick={setSelectedDrone}
                 selectedDrone={selectedDrone}
               />
@@ -94,6 +91,7 @@ function App() {
                     drone={drone}
                     isSelected={selectedDrone === drone.id}
                     onClick={() => setSelectedDrone(drone.id)}
+                    authHeaders={authHeaders}
                   />
                 ))}
               </div>

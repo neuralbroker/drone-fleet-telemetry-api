@@ -9,7 +9,7 @@ import asyncio
 import logging
 import random
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Optional, Callable, Awaitable, Any
 from uuid import UUID
 
@@ -91,7 +91,7 @@ class DroneSimulator:
         # Previous position for GPS deviation calculation
         self._prev_lat = self.lat
         self._prev_lng = self.lng
-        self._prev_timestamp = datetime.utcnow()
+        self._prev_timestamp = datetime.now(timezone.utc)
         
         # Task management
         self._task: Optional[asyncio.Task] = None
@@ -197,7 +197,7 @@ class DroneSimulator:
         Returns:
             TelemetryFrame with current drone state
         """
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         
         # Calculate GPS movement for deviation detection
         time_delta = (now - self._prev_timestamp).total_seconds()
@@ -357,7 +357,7 @@ class TelemetrySimulator:
         models = list(DroneModel)
         
         for i in range(count):
-            drone_id = uuid.uuid4()
+            drone_id = UUID(f"00000000-0000-4000-8000-{(i+1):012d}")
             name = drone_names[i % len(drone_names)]
             model = models[i % len(models)]
             

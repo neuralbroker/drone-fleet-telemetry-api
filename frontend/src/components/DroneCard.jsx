@@ -16,7 +16,7 @@ const missionStatusColors = {
   aborted: 'text-red-500',
 };
 
-function DroneCard({ drone, isSelected, onClick }) {
+function DroneCard({ drone, isSelected, onClick, authHeaders }) {
   const [showChart, setShowChart] = useState(false);
   const telemetry = drone.telemetry;
   const status = drone.status || 'idle';
@@ -111,7 +111,7 @@ function DroneCard({ drone, isSelected, onClick }) {
           
           {showChart && (
             <div className="mt-2">
-              <BatteryChart droneId={drone.id} />
+              <BatteryChart droneId={drone.id} authHeaders={authHeaders} />
             </div>
           )}
         </div>

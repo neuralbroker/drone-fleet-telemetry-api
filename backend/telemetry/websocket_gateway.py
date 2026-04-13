@@ -7,7 +7,7 @@ with support for per-drone filtering and heartbeat management.
 import asyncio
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Optional, Set, Any
 from uuid import UUID
 
@@ -39,21 +39,25 @@ class ConnectionManager:
         websocket: WebSocket,
         token: Optional[str] = None
     ) -> Dict[str, Any]:
-        """Accept a new WebSocket connection."""
-        await websocket.accept()
-        logger.info("WebSocket accepted, connecting to manager")
+        """Accept a new WebSocket connection. Requires valid JWT token."""
+        if not token:
+            await websocket.close(code=4001, reason="Authentication required")
+            return None
         
-        token_data = None
-        if token:
-            token_data = decode_token(token)
-            logger.info(f"Token decoded: {token_data}")
+        token_data = decode_token(token)
+        if not token_data:
+            await websocket.close(code=4001, reason="Invalid or expired token")
+            return None
+        
+        await websocket.accept()
+        logger.info(f"WebSocket accepted for user {token_data.username}")
         
         metadata = {
             "websocket": websocket,
             "token_data": token_data,
             "subscribed_drones": None,
-            "last_heartbeat": datetime.utcnow(),
-            "connected_at": datetime.utcnow()
+            "last_heartbeat": datetime.now(timezone.utc),
+            "connected_at": datetime.now(timezone.utc)
         }
         
         self.active_connections[websocket] = metadata
@@ -80,7 +84,7 @@ class ConnectionManager:
     
     async def broadcast(self, message: dict, filter_drones: Optional[Set[str]] = None) -> None:
         """Broadcast message to all connected clients."""
-        logger.info(f"Broadcasting to {len(self.active_connections)} clients")
+        logger.debug(f"Broadcasting to {len(self.active_connections)} clients")
         disconnected = []
         
         for websocket, metadata in self.active_connections.items():
@@ -92,7 +96,6 @@ class ConnectionManager:
             
             try:
                 await websocket.send_json(message)
-                logger.info("Message sent to client")
             except Exception as e:
                 logger.warning(f"Error broadcasting to client: {e}")
                 disconnected.append(websocket)
@@ -105,7 +108,7 @@ class ConnectionManager:
         message = {
             "type": WSMessageType.TELEMETRY.value,
             "data": frame.model_dump(mode='json'),
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
         await self.broadcast(message)
     
@@ -114,7 +117,7 @@ class ConnectionManager:
         message = {
             "type": WSMessageType.ALERT.value,
             "data": alert,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
         await self.broadcast(message)
     
@@ -122,8 +125,8 @@ class ConnectionManager:
         """Send heartbeat ping to client."""
         message = {
             "type": WSMessageType.HEARTBEAT.value,
-            "data": {"timestamp": datetime.utcnow().isoformat()},
-            "timestamp": datetime.utcnow().isoformat()
+            "data": {"timestamp": datetime.now(timezone.utc).isoformat()},
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
         await self.send_personal(websocket, message)
     
@@ -163,7 +166,8 @@ async def websocket_telemetry_all(
 ):
     """WebSocket endpoint for streaming all drone telemetry."""
     metadata = await connection_manager.connect(websocket, token)
-    logger.info(f"WebSocket connected, sending snapshot")
+    if not metadata:
+        return
     
     heartbeat_task: Optional[asyncio.Task] = None
     
@@ -223,6 +227,8 @@ async def websocket_telemetry_single(
 ):
     """WebSocket endpoint for streaming single drone telemetry."""
     metadata = await connection_manager.connect(websocket, token)
+    if not metadata:
+        return
     
     connection_manager.update_subscription(websocket, subscribe=[drone_id])
     

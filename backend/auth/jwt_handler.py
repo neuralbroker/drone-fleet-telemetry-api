@@ -5,7 +5,7 @@ Handles JWT token creation, validation, and token data extraction
 using python-jose library.
 """
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID
 
@@ -67,9 +67,9 @@ def create_access_token(
         Encoded JWT token string
     """
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(
+        expire = datetime.now(timezone.utc) + timedelta(
             minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES
         )
     
@@ -78,7 +78,7 @@ def create_access_token(
         "username": username,
         "role": role.value,
         "exp": expire,
-        "iat": datetime.utcnow()
+        "iat": datetime.now(timezone.utc)
     }
     
     encoded_jwt = jwt.encode(

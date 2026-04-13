@@ -87,14 +87,23 @@ class TelemetryPublisher:
                 data = frame.model_dump_json()
                 
                 # Publish to global channel
-                await redis_client.publish(self.GLOBAL_CHANNEL, data)
+                if redis_client.is_connected:
+                    try:
+                        await redis_client.publish(self.GLOBAL_CHANNEL, data)
+                    except Exception as e:
+                        logger.warning(f"Failed to publish to global channel: {e}")
                 
                 # Publish to drone-specific channel
-                drone_channel = f"telemetry:{frame.drone_id}"
-                await redis_client.publish(drone_channel, data)
+                if redis_client.is_connected:
+                    drone_channel = f"telemetry:{frame.drone_id}"
+                    try:
+                        await redis_client.publish(drone_channel, data)
+                    except Exception as e:
+                        logger.warning(f"Failed to publish to drone channel: {e}")
                 
                 # Also store latest telemetry in Redis hash for quick access
-                await self._store_latest_telemetry(frame)
+                if redis_client.is_connected:
+                    await self._store_latest_telemetry(frame)
                 
                 # Call external callback if set
                 if self._telemetry_callback:

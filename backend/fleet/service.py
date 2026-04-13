@@ -6,7 +6,7 @@ Interfaces with the simulator and Redis storage.
 """
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 from uuid import UUID, uuid4
 
@@ -379,7 +379,7 @@ class FleetService:
         )
         
         # Recent alerts (last hour)
-        recent_alerts = sum(1 for a in self._alerts if (datetime.utcnow() - a.timestamp).total_seconds() < 3600)
+        recent_alerts = sum(1 for a in self._alerts if (datetime.now(timezone.utc) - a.timestamp).total_seconds() < 3600)
         
         return FleetSummary(
             total_drones=total,

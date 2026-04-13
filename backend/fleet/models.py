@@ -4,12 +4,16 @@ Data models for the Drone Fleet Telemetry API.
 Defines all Pydantic models for drones, telemetry, alerts, and missions
 with validation and serialization capabilities.
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional, List
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, ConfigDict
+
+
+def _utcnow():
+    return datetime.now(timezone.utc)
 
 
 class DroneModel(str, Enum):
@@ -155,7 +159,7 @@ class Drone(DroneBase):
     id: UUID = Field(default_factory=uuid4)
     status: DroneStatus = Field(default=DroneStatus.IDLE)
     mission_id: Optional[UUID] = None
-    registered_at: datetime = Field(default_factory=datetime.utcnow)
+    registered_at: datetime = Field(default_factory=_utcnow)
 
 
 class TelemetryFrame(TelemetryFrameBase):
@@ -170,7 +174,7 @@ class Alert(AlertBase):
     model_config = ConfigDict(from_attributes=True)
     
     id: UUID = Field(default_factory=uuid4)
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=_utcnow)
 
 
 class Mission(BaseModel):
@@ -181,7 +185,7 @@ class Mission(BaseModel):
     drone_id: UUID
     waypoints: List[Waypoint]
     status: MissionStatus = Field(default=MissionStatus.IDLE)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=_utcnow)
 
 
 class Token(BaseModel):
@@ -203,7 +207,7 @@ class User(UserBase):
     model_config = ConfigDict(from_attributes=True)
     
     id: UUID = Field(default_factory=uuid4)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=_utcnow)
 
 
 # ============================================================================
@@ -227,7 +231,7 @@ class DroneStatusSnapshot(BaseModel):
     """Latest status snapshot for a drone."""
     drone: Drone
     telemetry: Optional[TelemetryFrame] = None
-    last_update: datetime = Field(default_factory=datetime.utcnow)
+    last_update: datetime = Field(default_factory=_utcnow)
 
 
 # ============================================================================
@@ -249,7 +253,7 @@ class WSMessage(BaseModel):
     """Generic WebSocket message wrapper."""
     type: WSMessageType
     data: dict
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=_utcnow)
 
 
 class WSSubscribeMessage(BaseModel):

@@ -2,9 +2,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:9001';
 const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:9001';
-const AUTO_CONNECT = import.meta.env.VITE_AUTO_CONNECT !== 'false';
 
-export function useTelemetry(enabled = AUTO_CONNECT) {
+export function useTelemetry(token) {
   const [drones, setDrones] = useState({});
   const [alerts, setAlerts] = useState([]);
   const [fleetSummary, setFleetSummary] = useState(null);
@@ -13,12 +12,21 @@ export function useTelemetry(enabled = AUTO_CONNECT) {
   const wsRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
 
+  const authHeaders = useCallback(() => ({
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json'
+  }), [token]);
+
   const connect = useCallback(() => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
+    if (!token || wsRef.current?.readyState === WebSocket.OPEN) {
       return;
     }
 
-    const ws = new WebSocket(`${WS_URL}/ws/telemetry`);
+    const wsUrl = token
+      ? `${WS_URL}/ws/telemetry?token=${encodeURIComponent(token)}`
+      : `${WS_URL}/ws/telemetry`;
+
+    const ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
       console.log('WebSocket connected');
@@ -29,7 +37,7 @@ export function useTelemetry(enabled = AUTO_CONNECT) {
     ws.onmessage = (event) => {
       try {
         const message = JSON.parse(event.data);
-        
+
         switch (message.type) {
           case 'snapshot':
             handleSnapshot(message.data);
@@ -54,25 +62,25 @@ export function useTelemetry(enabled = AUTO_CONNECT) {
     ws.onclose = () => {
       console.log('WebSocket disconnected');
       setConnected(false);
-      
-      // Attempt to reconnect after 3 seconds
-      reconnectTimeoutRef.current = setTimeout(() => {
-        console.log('Attempting to reconnect...');
-        connect();
-      }, 3000);
+
+      if (token) {
+        reconnectTimeoutRef.current = setTimeout(() => {
+          console.log('Attempting to reconnect...');
+          connect();
+        }, 3000);
+      }
     };
 
-    ws.onerror = (err) => {
-      console.error('WebSocket error:', err);
+    ws.onerror = () => {
       setError('WebSocket connection error');
     };
 
     wsRef.current = ws;
-  }, []);
+  }, [token]);
 
   const handleSnapshot = useCallback((data) => {
     const droneMap = {};
-    
+
     if (data.drones) {
       data.drones.forEach(({ drone, telemetry }) => {
         droneMap[drone.id] = {
@@ -81,14 +89,14 @@ export function useTelemetry(enabled = AUTO_CONNECT) {
         };
       });
     }
-    
+
     setDrones(droneMap);
     setAlerts(data.alerts || []);
   }, []);
 
   const handleTelemetry = useCallback((data) => {
     const droneId = data.drone_id;
-    
+
     setDrones(prev => ({
       ...prev,
       [droneId]: {
@@ -113,11 +121,10 @@ export function useTelemetry(enabled = AUTO_CONNECT) {
   }, []);
 
   const fetchFleetSummary = useCallback(async () => {
+    if (!token) return;
     try {
       const response = await fetch(`${API_URL}/fleet/summary`, {
-        headers: {
-          'Authorization': 'Bearer dummy-token'
-        }
+        headers: authHeaders()
       });
       if (response.ok) {
         const data = await response.json();
@@ -126,19 +133,16 @@ export function useTelemetry(enabled = AUTO_CONNECT) {
     } catch (err) {
       console.error('Error fetching fleet summary:', err);
     }
-  }, []);
+  }, [token, authHeaders]);
 
   useEffect(() => {
-    if (!enabled) return;
-    
+    if (!token) return;
+
     connect();
-    
-    // Fetch initial fleet summary
     fetchFleetSummary();
-    
-    // Refresh summary every 10 seconds
+
     const interval = setInterval(fetchFleetSummary, 10000);
-    
+
     return () => {
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
@@ -148,7 +152,7 @@ export function useTelemetry(enabled = AUTO_CONNECT) {
       }
       clearInterval(interval);
     };
-  }, [enabled, connect, fetchFleetSummary]);
+  }, [token, connect, fetchFleetSummary]);
 
   const subscribe = useCallback((droneIds) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -170,7 +174,8 @@ export function useTelemetry(enabled = AUTO_CONNECT) {
     error,
     subscribe,
     unsubscribe,
-    refreshSummary: fetchFleetSummary
+    refreshSummary: fetchFleetSummary,
+    authHeaders
   };
 }
 
